@@ -1,0 +1,182 @@
+import React, { useState } from 'react';
+
+interface Product {
+  id: number;
+  name: string;
+  price: string;
+  stock: number;
+  isActive: boolean;
+  image?: string;
+}
+
+interface EditProductProps {
+  product: Product;
+  onClose: () => void;
+  onUpdate: (product: Product) => void;
+}
+
+export const EditProduct = ({ product, onClose, onUpdate }: EditProductProps) => {
+  const [formData, setFormData] = useState({
+    name: product.name,
+    price: product.price,
+    stock: product.stock.toString(),
+    image: product.image || '',
+    isActive: product.isActive
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdate({
+      ...product,
+      name: formData.name,
+      price: formData.price,
+      stock: parseInt(formData.stock),
+      image: formData.image || undefined,
+      isActive: formData.isActive
+    });
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleToggleActive = () => {
+    setFormData(prev => ({
+      ...prev,
+      isActive: !prev.isActive
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-[#222] rounded-lg w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-[#333]">
+          <h2 className="text-xl font-bold text-white">Edit Product</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Product Name */}
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
+              Product Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              placeholder="Enter product name"
+            />
+          </div>
+
+          {/* Price */}
+          <div>
+            <label htmlFor="price" className="block text-sm font-medium text-gray-300 mb-1">
+              Price (ETH)
+            </label>
+            <input
+              type="number"
+              id="price"
+              name="price"
+              value={formData.price}
+              onChange={handleChange}
+              required
+              step="0.01"
+              min="0"
+              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              placeholder="0.00"
+            />
+          </div>
+
+          {/* Stock */}
+          <div>
+            <label htmlFor="stock" className="block text-sm font-medium text-gray-300 mb-1">
+              Stock Quantity
+            </label>
+            <input
+              type="number"
+              id="stock"
+              name="stock"
+              value={formData.stock}
+              onChange={handleChange}
+              required
+              min="0"
+              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              placeholder="Enter stock quantity"
+            />
+          </div>
+
+          {/* Image URL */}
+          <div>
+            <label htmlFor="image" className="block text-sm font-medium text-gray-300 mb-1">
+              Image URL (Optional)
+            </label>
+            <input
+              type="url"
+              id="image"
+              name="image"
+              value={formData.image}
+              onChange={handleChange}
+              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+
+          {/* Status Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleToggleActive}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                formData.isActive ? 'bg-blue-500' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  formData.isActive ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-sm text-gray-300">
+              {formData.isActive ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
+            >
+              Update Product
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}; 
