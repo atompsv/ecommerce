@@ -10,7 +10,7 @@ import { SellerDashboard } from "./SellerDashboard";
 import { OrderHistory } from "./OrderHistory";
 import { Delivery } from "./Delivery";
 
-const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
+const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
 
 export default function Home() {
   const { actions } = useMiniAppContext();

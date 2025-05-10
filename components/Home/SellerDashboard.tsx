@@ -5,7 +5,7 @@ import SimpleEcommerce from '../../artifacts/contracts/SimpleEcommerce.sol/Simpl
 import { AddProduct } from './AddProduct';
 import { EditProduct } from './EditProduct';
 
-const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
+const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
 
 interface Product {
   id: number;
@@ -127,16 +127,17 @@ export const SellerDashboard = () => {
       }
 
       const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
       const contract = new ethers.Contract(
         CONTRACT_ADDRESS,
         [
           "function getAllProducts() external view returns (tuple(uint256 id, address seller, string name, uint256 price, bool available, uint256 stock)[])",
-          "function getSellerOrders() external view returns (uint256[])",
+          "function debugGetAllSellerOrders(address) external view returns (uint256[])",
           "function getOrderDetails(uint256 orderId) external view returns (uint256 id, address buyer, uint256[] productIds, uint256[] quantities, uint256 totalPaid, uint8 status, uint256 timestamp)",
           "function getShippingInfo(uint256 orderId) external view returns (string memory streetAddress, string memory city, string memory state, string memory zipCode, string memory country, bool hasInfo)",
           "function updateOrderStatus(uint256 orderId, uint8 newStatus) external"
         ],
-        provider
+        signer
       );
 
       // Fetch products
@@ -157,7 +158,7 @@ export const SellerDashboard = () => {
 
       // Fetch orders
       console.log("Fetching seller orders...");
-      const orderIds = await contract.getSellerOrders();
+      const orderIds = await contract.debugGetAllSellerOrders(address);
       console.log("Order IDs:", orderIds);
 
       const orderPromises = orderIds.map(async (orderId: bigint) => {

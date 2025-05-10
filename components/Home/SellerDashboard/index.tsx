@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import SimpleEcommerce from '../../../artifacts/contracts/SimpleEcommerce.sol/SimpleEcommerce.json';
 import { AddProduct } from '../AddProduct';
 
-const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
+const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
 
 interface SellerDashboardProps {
   onClose: () => void;
