@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
+import { ethers } from 'ethers';
+import SimpleEcommerce from '../../artifacts/contracts/SimpleEcommerce.sol/SimpleEcommerce.json';
+
+const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
 
 interface Order {
   id: number;
@@ -10,39 +15,12 @@ interface Order {
   seller: string;
 }
 
-// Mock data for development
-const mockOrders: Order[] = [
-  {
-    id: 1,
-    productName: "Premium Digital Art NFT Collection",
-    quantity: 2,
-    totalPrice: "0.2",
-    date: "2024-03-20",
-    status: "completed",
-    seller: "0x123...abc"
-  },
-  {
-    id: 2,
-    productName: "Rare Crypto Collectible",
-    quantity: 1,
-    totalPrice: "0.05",
-    date: "2024-03-19",
-    status: "processing",
-    seller: "0x456...def"
-  },
-  {
-    id: 3,
-    productName: "Limited Edition Trading Card",
-    quantity: 3,
-    totalPrice: "0.6",
-    date: "2024-03-18",
-    status: "cancelled",
-    seller: "0x789...ghi"
-  }
-];
-
 export const OrderHistory = () => {
+  const { isConnected, address } = useAccount();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
@@ -57,6 +35,94 @@ export const OrderHistory = () => {
     }
   };
 
+  const fetchOrders = async () => {
+    if (!isConnected || !address) {
+      console.log("Not connected or no address available");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function getBuyerOrders() external view returns (uint256[])",
+          "function getOrderDetails(uint256 orderId) external view returns (uint256 id, address buyer, uint256[] productIds, uint256[] quantities, uint256 totalPaid, uint8 status, uint256 timestamp)",
+          "function getProductDetails(uint256 productId) external view returns (uint256 id, address seller, string memory name, uint256 price, bool available, uint256 stock)"
+        ],
+        provider
+      );
+
+      console.log("Fetching orders for address:", address);
+      
+      // Get all order IDs for the current user
+      const orderIds = await contract.getBuyerOrders();
+      console.log("Raw order IDs:", orderIds);
+
+      if (!orderIds || orderIds.length === 0) {
+        console.log("No orders found for this address");
+        setOrders([]);
+        return;
+      }
+
+      // Fetch details for each order
+      const orderPromises = orderIds.map(async (orderId: bigint) => {
+        console.log("Fetching details for order ID:", orderId.toString());
+        
+        const orderDetails = await contract.getOrderDetails(orderId);
+        console.log("Order details:", orderDetails);
+        
+        const productDetails = await contract.getProductDetails(orderDetails.productIds[0]);
+        console.log("Product details:", productDetails);
+        
+        // Convert status from enum to string
+        const statusMap = ['pending', 'processing', 'processing', 'completed', 'cancelled'];
+        const status = statusMap[orderDetails.status] as Order['status'];
+        
+        // Convert timestamp to date string
+        const date = new Date(Number(orderDetails.timestamp) * 1000).toISOString().split('T')[0];
+        
+        // Convert totalPaid from wei to ETH
+        const totalPrice = ethers.formatEther(orderDetails.totalPaid);
+        
+        const order = {
+          id: Number(orderId),
+          productName: productDetails.name,
+          quantity: Number(orderDetails.quantities[0]),
+          totalPrice,
+          date,
+          status,
+          seller: productDetails.seller
+        };
+        
+        console.log("Processed order:", order);
+        return order;
+      });
+
+      const fetchedOrders = await Promise.all(orderPromises);
+      console.log("All fetched orders:", fetchedOrders);
+      setOrders(fetchedOrders);
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isConnected) {
+      fetchOrders();
+    }
+  }, [isConnected, address]);
+
   // Order List View
   const OrderListView = () => (
     <div className="w-full space-y-4">
@@ -65,9 +131,23 @@ export const OrderHistory = () => {
         <h2 className="text-xl font-bold text-white">Order History</h2>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-900/30 text-red-400 border border-red-500/30 rounded-lg p-4">
+          {error}
+        </div>
+      )}
+
       {/* Orders List */}
       <div className="space-y-3">
-        {mockOrders.map((order) => (
+        {orders.map((order) => (
           <div 
             key={order.id} 
             className="bg-[#222] rounded-lg p-4 hover:bg-[#2a2a2a] transition-colors cursor-pointer w-full"
@@ -98,7 +178,7 @@ export const OrderHistory = () => {
       </div>
 
       {/* Empty State */}
-      {mockOrders.length === 0 && (
+      {!loading && !error && orders.length === 0 && (
         <div className="bg-[#222] rounded-lg p-8 text-center">
           <div className="w-12 h-12 mx-auto mb-4 text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

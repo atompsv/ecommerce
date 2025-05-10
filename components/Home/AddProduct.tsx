@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ethers } from 'ethers';
 import SimpleEcommerce from '../../artifacts/contracts/SimpleEcommerce.sol/SimpleEcommerce.json';
 
-const CONTRACT_ADDRESS = "0xeff0393d86F712920f66388477a8C5362C15f265";
+const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
 
 interface AddProductProps {
   onClose: () => void;

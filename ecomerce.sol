@@ -97,55 +97,57 @@ contract SimpleEcommerce {
         require(productIds.length == quantities.length, "Mismatched inputs");
         require(productIds.length > 0, "Empty order");
 
-        uint256 totalCost = 0;
+        uint256 totalCost;
+        uint256[] memory sellerAmounts = new uint256[](productIds.length);
+        address[] memory sellers = new address[](productIds.length);
+        
+        // First loop: validate and calculate costs
         for (uint256 i = 0; i < productIds.length; i++) {
             Product storage p = products[productIds[i]];
             require(p.available, "Product not available");
             require(p.stock >= quantities[i], "Insufficient stock");
-            totalCost += p.price * quantities[i];
             
-            // Update stock
+            uint256 amount = p.price * quantities[i];
+            totalCost += amount;
+            sellerAmounts[i] = amount;
+            sellers[i] = p.seller;
+            
+            // Update stock immediately
             p.stock -= quantities[i];
         }
 
         require(msg.value == totalCost, "Incorrect payment");
 
+        // Second loop: transfer funds to sellers
         for (uint256 i = 0; i < productIds.length; i++) {
-            address seller = products[productIds[i]].seller;
-            uint256 amount = products[productIds[i]].price * quantities[i];
-            payable(seller).transfer(amount);
+            payable(sellers[i]).transfer(sellerAmounts[i]);
         }
 
-        // Initialize empty shipping info
-        ShippingInfo memory emptyShippingInfo = ShippingInfo({
+        // Create order with minimal storage
+        uint256 orderId = nextOrderId++;
+        orders[orderId] = Order({
+            id: orderId,
+            buyer: msg.sender,
+            productIds: productIds,
+            quantities: quantities,
+            totalPaid: msg.value,
+            shippingInfo: ShippingInfo({
             streetAddress: "",
             city: "",
             state: "",
             zipCode: "",
             country: ""
+            }),
+            hasShippingInfo: false,
+            status: OrderStatus.Pending,
+            timestamp: block.timestamp
         });
 
-        orders[nextOrderId] = Order(
-            nextOrderId,
-            msg.sender,
-            productIds,
-            quantities,
-            msg.value,
-            emptyShippingInfo,
-            false,
-            OrderStatus.Pending,
-            block.timestamp
-        );
+        // Update order mappings
+        buyerOrders[msg.sender].push(orderId);
+        sellerOrders[sellers[0]].push(orderId);
 
-        // Add order to buyer's list
-        buyerOrders[msg.sender].push(nextOrderId);
-        
-        // Add order to seller's list
-        address seller = products[productIds[0]].seller;
-        sellerOrders[seller].push(nextOrderId);
-
-        emit OrderPlaced(nextOrderId, msg.sender, msg.value);
-        nextOrderId++;
+        emit OrderPlaced(orderId, msg.sender, msg.value);
     }
 
     function addShippingInfoToOrder(

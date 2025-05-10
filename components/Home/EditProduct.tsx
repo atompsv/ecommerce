@@ -13,9 +13,10 @@ interface EditProductProps {
   product: Product;
   onClose: () => void;
   onUpdate: (product: Product) => void;
+  isUpdating?: boolean;
 }
 
-export const EditProduct = ({ product, onClose, onUpdate }: EditProductProps) => {
+export const EditProduct = ({ product, onClose, onUpdate, isUpdating = false }: EditProductProps) => {
   const [formData, setFormData] = useState({
     name: product.name,
     price: product.price,
@@ -170,9 +171,17 @@ export const EditProduct = ({ product, onClose, onUpdate }: EditProductProps) =>
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
+              disabled={isUpdating}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Update Product
+              {isUpdating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                  Updating...
+                </>
+              ) : (
+                'Update Product'
+              )}
             </button>
           </div>
         </form>

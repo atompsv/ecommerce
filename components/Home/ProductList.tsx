@@ -9,7 +9,20 @@ declare global {
   }
 }
 
-const CONTRACT_ADDRESS = "0xeff0393d86F712920f66388477a8C5362C15f265";
+const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
+
+// Monad chain configuration
+const MONAD_CHAIN = {
+  chainId: '0x279F', // 10143 in hex
+  chainName: 'Monad Testnet',
+  nativeCurrency: {
+    name: 'Monad',
+    symbol: 'MONAD',
+    decimals: 18
+  },
+  rpcUrls: ['https://testnet-rpc.monad.xyz'],
+  blockExplorerUrls: ['https://explorer.monad.xyz']
+};
 
 interface Product {
   id: number;
@@ -29,8 +42,15 @@ interface ProductDetails {
   stock: bigint;
 }
 
+interface OrderConfirmation {
+  product: Product;
+  quantity: number;
+  totalPrice: string;
+  isOpen: boolean;
+}
+
 export interface ProductListProps {
-  onPurchaseSuccess: () => void;
+  onPurchaseSuccess?: () => void;
 }
 
 export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) => {
@@ -38,21 +58,33 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState<number | null>(null);
+  const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmation | null>(null);
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+
+  const checkChain = async () => {
+    if (!window.ethereum) {
+      throw new Error("Please install MetaMask to use this feature");
+    }
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    
+    if (network.chainId !== BigInt(10143)) {
+      throw new Error("Please connect to Monad Testnet to use this dApp");
+    }
+  };
 
   const loadProducts = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Check if MetaMask is installed
       if (!window.ethereum) {
         throw new Error("Please install MetaMask to use this feature");
       }
 
-      // Request account access
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      await checkChain();
 
-      // Create provider and contract instance
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(
         CONTRACT_ADDRESS,
@@ -66,13 +98,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
       );
 
       try {
-        // Get all products in one call
         const allProducts = await contract.getAllProducts();
         console.log("All products:", allProducts);
 
-        // Transform the data
         const formattedProducts = allProducts.map((product: ProductDetails, index: number) => ({
-          id: index + 1,
+          id: Number(product.id),
           name: product.name,
           price: ethers.formatEther(product.price),
           stock: Number(product.stock),
@@ -109,30 +139,104 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
     };
   }, []);
 
-  const handlePurchase = async (productId: number, price: string) => {
+  const handleBuyClick = (product: Product) => {
+    setOrderConfirmation({
+      product,
+      quantity: 1,
+      totalPrice: product.price,
+      isOpen: true
+    });
+  };
+
+  const handleQuantityChange = (quantity: number) => {
+    if (orderConfirmation) {
+      const totalPrice = (Number(orderConfirmation.product.price) * quantity).toFixed(18);
+      setOrderConfirmation({
+        ...orderConfirmation,
+        quantity,
+        totalPrice
+      });
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (!orderConfirmation) return;
+
     try {
-      setPurchasing(productId);
+      setPurchasing(orderConfirmation.product.id);
       setError(null);
 
       if (!window.ethereum) {
         throw new Error("Please install MetaMask to use this feature");
       }
 
+      await checkChain();
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(
         CONTRACT_ADDRESS,
-        SimpleEcommerce.abi,
+        [
+          "function placeOrder(uint256[] productIds, uint256[] quantities) payable",
+          "function getAllProducts() view returns (tuple(uint256 id, address seller, string name, uint256 price, bool available, uint256 stock)[])",
+          "function nextProductId() view returns (uint256)",
+          "function getProductDetails(uint256 productId) view returns (uint256 id, address seller, string name, uint256 price, bool available, uint256 stock)"
+        ],
         signer
       );
 
-      const tx = await contract.placeOrder(productId, {
-        value: ethers.parseUnits(price, 18)
+      // Convert productId to BigInt since the contract expects uint256
+      const productIdBigInt = BigInt(orderConfirmation.product.id);
+      
+      // Create arrays for productIds and quantities
+      const productIds = [productIdBigInt];
+      const quantities = [BigInt(orderConfirmation.quantity)];
+
+      // Convert price to wei
+      const priceInWei = ethers.parseEther(orderConfirmation.totalPrice);
+
+      console.log("Transaction parameters:", {
+        productIds,
+        quantities,
+        value: priceInWei.toString()
       });
 
-      await tx.wait();
-      onPurchaseSuccess();
-      await loadProducts(); // Refresh the product list
+      // Estimate gas first
+      const gasEstimate = await contract.placeOrder.estimateGas(
+        productIds,
+        quantities,
+        { value: priceInWei }
+      );
+
+      // Add 20% to gas estimate for safety
+      const gasLimit = gasEstimate * BigInt(12) / BigInt(10);
+
+      // Call the placeOrder function with arrays
+      const tx = await contract.placeOrder(productIds, quantities, {
+        value: priceInWei,
+        gasLimit
+      });
+
+      console.log("Transaction sent:", tx.hash);
+
+      // Wait for transaction to be mined
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 1) {
+        setPurchaseSuccess(true);
+        if (onPurchaseSuccess) {
+          onPurchaseSuccess();
+        }
+        await loadProducts(); // Refresh the product list
+        setOrderConfirmation(null); // Close the confirmation modal
+        
+        // Show success message for 3 seconds
+        setTimeout(() => {
+          setPurchaseSuccess(false);
+        }, 3000);
+      } else {
+        throw new Error("Transaction failed");
+      }
     } catch (err) {
       console.error("Error purchasing product:", err);
       setError(err instanceof Error ? err.message : "Failed to purchase product");
@@ -160,6 +264,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
 
   return (
     <div className="w-full">
+      {/* Success Message */}
+      {purchaseSuccess && (
+        <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative animate-fade-in-out" role="alert">
+          <strong className="font-bold">Success! </strong>
+          <span className="block sm:inline">Your purchase was completed successfully.</span>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-2xl font-bold text-white">Available Products</h2>
       </div>
@@ -206,7 +318,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
               {product.available && (
                 <button 
                   className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold flex items-center justify-center gap-1.5"
-                  onClick={() => handlePurchase(product.id, product.price)}
+                  onClick={() => handleBuyClick(product)}
                   disabled={purchasing === product.id}
                 >
                   {purchasing === product.id ? (
@@ -228,6 +340,67 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
           </div>
         ))}
       </div>
+
+      {/* Order Confirmation Modal */}
+      {orderConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-[#222] rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-4">Confirm Your Order</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-gray-400">Product</p>
+                <p className="text-white font-semibold">{orderConfirmation.product.name}</p>
+              </div>
+
+              <div>
+                <p className="text-gray-400">Price per item</p>
+                <p className="text-white font-semibold">{orderConfirmation.product.price} ETH</p>
+              </div>
+
+              <div>
+                <p className="text-gray-400">Quantity</p>
+                <div className="flex items-center gap-2">
+                  <button 
+                    className="px-2 py-1 bg-blue-600 text-white rounded"
+                    onClick={() => handleQuantityChange(Math.max(1, orderConfirmation.quantity - 1))}
+                  >
+                    -
+                  </button>
+                  <span className="text-white">{orderConfirmation.quantity}</span>
+                  <button 
+                    className="px-2 py-1 bg-blue-600 text-white rounded"
+                    onClick={() => handleQuantityChange(orderConfirmation.quantity + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-gray-400">Total Price</p>
+                <p className="text-white font-semibold">{orderConfirmation.totalPrice} ETH</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6">
+              <button
+                className="flex-1 py-2 px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                onClick={() => setOrderConfirmation(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                onClick={handlePurchase}
+                disabled={purchasing !== null}
+              >
+                {purchasing !== null ? 'Processing...' : 'Confirm Purchase'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }; 

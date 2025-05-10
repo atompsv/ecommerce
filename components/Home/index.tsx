@@ -10,7 +10,7 @@ import { SellerDashboard } from "./SellerDashboard";
 import { OrderHistory } from "./OrderHistory";
 import { Delivery } from "./Delivery";
 
-const CONTRACT_ADDRESS = "0xeff0393d86F712920f66388477a8C5362C15f265";
+const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
 
 export default function Home() {
   const { actions } = useMiniAppContext();
@@ -271,11 +271,9 @@ export default function Home() {
             <SellerDashboard />
           ) : showOrderHistory ? (
             <OrderHistory />
-          ) : showDelivery ? (
-            <Delivery onBack={() => setShowDelivery(false)} />
           ) : (
             <div className="w-full px-4 sm:px-6 lg:px-8">
-              <ProductList onPurchaseSuccess={() => setShowDelivery(true)} />
+              <ProductList />
             </div>
           )
         ) : (

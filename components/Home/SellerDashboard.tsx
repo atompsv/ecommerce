@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
+import { ethers } from 'ethers';
+import SimpleEcommerce from '../../artifacts/contracts/SimpleEcommerce.sol/SimpleEcommerce.json';
 import { AddProduct } from './AddProduct';
 import { EditProduct } from './EditProduct';
+
+const CONTRACT_ADDRESS = "0x6408b1A5234b0c18727001ab5931FDf511D56ADb";
 
 interface Product {
   id: number;
@@ -29,97 +34,216 @@ interface Order {
 }
 
 export const SellerDashboard = () => {
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      name: "Premium Digital Art",
-      price: "0.1",
-      stock: 10,
-      isActive: true,
-    },
-    {
-      id: 2,
-      name: "Rare Crypto Collectible",
-      price: "0.05",
-      stock: 15,
-      isActive: true,
-    }
-  ]);
-
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 1,
-      buyer: "0x123...abc",
-      productIds: [1],
-      quantities: [2],
-      totalPaid: "0.2",
-      status: "Pending",
-      timestamp: Date.now(),
-      shippingInfo: {
-        address: "123 Main St",
-        city: "New York",
-        state: "NY",
-        zipCode: "10001",
-        country: "USA"
-      }
-    },
-    {
-      id: 2,
-      buyer: "0x456...def",
-      productIds: [2],
-      quantities: [1],
-      totalPaid: "0.05",
-      status: "Accepted",
-      timestamp: Date.now() - 86400000, // 1 day ago
-      shippingInfo: {
-        address: "456 Market St",
-        city: "San Francisco",
-        state: "CA",
-        zipCode: "94105",
-        country: "USA"
-      }
-    }
-  ]);
-
+  const { isConnected, address } = useAccount();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isRegisteredSeller, setIsRegisteredSeller] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const [newProduct, setNewProduct] = useState<{ name: string; price: string; stock: string } | null>(null);
+  const [updatingProductId, setUpdatingProductId] = useState<number | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
 
-  const handleAddProduct = (product: Omit<Product, 'id' | 'isActive'>) => {
-    const newProduct: Product = {
-      ...product,
-      id: products.length + 1,
-      isActive: true
-    };
-    setProducts(prev => [...prev, newProduct]);
-    setShowAddProduct(false);
+  const checkSellerRegistration = async () => {
+    if (!isConnected || !address) return;
+
+    try {
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function registeredSellers(address) view returns (bool)"
+        ],
+        provider
+      );
+
+      const isSeller = await contract.registeredSellers(address);
+      setIsRegisteredSeller(isSeller);
+      
+      if (isSeller) {
+        await fetchSellerData();
+      }
+    } catch (err) {
+      console.error("Error checking seller registration:", err);
+      setError(err instanceof Error ? err.message : "Failed to check seller registration");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateProduct = (updatedProduct: Product) => {
-    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    setEditingProduct(null);
+  const handleRegisterAsSeller = async () => {
+    try {
+      setRegistering(true);
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function registerAsSeller() external"
+        ],
+        signer
+      );
+
+      const tx = await contract.registerAsSeller();
+      await tx.wait();
+
+      // Check registration status again
+      await checkSellerRegistration();
+    } catch (err) {
+      console.error("Error registering as seller:", err);
+      setError(err instanceof Error ? err.message : "Failed to register as seller");
+    } finally {
+      setRegistering(false);
+    }
   };
 
-  const handleDeleteProduct = (productId: number) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
+  const fetchSellerData = async () => {
+    if (!isConnected || !address) {
+      console.log("Not connected or no address available");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function getAllProducts() external view returns (tuple(uint256 id, address seller, string name, uint256 price, bool available, uint256 stock)[])",
+          "function getSellerOrders() external view returns (uint256[])",
+          "function getOrderDetails(uint256 orderId) external view returns (uint256 id, address buyer, uint256[] productIds, uint256[] quantities, uint256 totalPaid, uint8 status, uint256 timestamp)",
+          "function getShippingInfo(uint256 orderId) external view returns (string memory streetAddress, string memory city, string memory state, string memory zipCode, string memory country, bool hasInfo)",
+          "function updateOrderStatus(uint256 orderId, uint8 newStatus) external"
+        ],
+        provider
+      );
+
+      // Fetch products
+      console.log("Fetching products...");
+      const allProducts = await contract.getAllProducts();
+      const sellerProducts = allProducts
+        .filter((p: any) => p.seller.toLowerCase() === address.toLowerCase())
+        .map((p: any) => ({
+          id: Number(p.id),
+          name: p.name,
+          price: ethers.formatEther(p.price),
+          stock: Number(p.stock),
+          isActive: p.available
+        }))
+        .sort((a: Product, b: Product) => b.id - a.id); // Sort by ID in descending order
+      console.log("Seller products:", sellerProducts);
+      setProducts(sellerProducts);
+
+      // Fetch orders
+      console.log("Fetching seller orders...");
+      const orderIds = await contract.getSellerOrders();
+      console.log("Order IDs:", orderIds);
+
+      const orderPromises = orderIds.map(async (orderId: bigint) => {
+        const orderDetails = await contract.getOrderDetails(orderId);
+        const shippingInfo = await contract.getShippingInfo(orderId);
+        
+        // Convert status from enum to string
+        const statusMap = ['Pending', 'Accepted', 'Shipped', 'Delivered', 'Cancelled'];
+        const status = statusMap[orderDetails.status] as Order['status'];
+        
+        return {
+          id: Number(orderId),
+          buyer: orderDetails.buyer,
+          productIds: orderDetails.productIds.map((id: bigint) => Number(id)),
+          quantities: orderDetails.quantities.map((q: bigint) => Number(q)),
+          totalPaid: ethers.formatEther(orderDetails.totalPaid),
+          status,
+          timestamp: Number(orderDetails.timestamp) * 1000,
+          shippingInfo: shippingInfo.hasInfo ? {
+            address: shippingInfo.streetAddress,
+            city: shippingInfo.city,
+            state: shippingInfo.state,
+            zipCode: shippingInfo.zipCode,
+            country: shippingInfo.country
+          } : undefined
+        };
+      });
+
+      const fetchedOrders = await Promise.all(orderPromises);
+      console.log("Fetched orders:", fetchedOrders);
+      setOrders(fetchedOrders);
+    } catch (err) {
+      console.error("Error fetching seller data:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch seller data");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateOrderStatus = (orderId: number, newStatus: Order['status']) => {
-    setOrders(prev => prev.map(order => 
-      order.id === orderId ? { ...order, status: newStatus } : order
-    ));
+  useEffect(() => {
+    if (isConnected) {
+      checkSellerRegistration();
+    }
+  }, [isConnected, address]);
+
+  const handleUpdateOrderStatus = async (orderId: number, newStatus: Order['status']) => {
+    try {
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function updateOrderStatus(uint256 orderId, uint8 newStatus) external"
+        ],
+        signer
+      );
+
+      // Convert status string to enum value
+      const statusMap = ['Pending', 'Accepted', 'Shipped', 'Delivered', 'Cancelled'];
+      const statusValue = statusMap.indexOf(newStatus);
+
+      const tx = await contract.updateOrderStatus(orderId, statusValue);
+      await tx.wait();
+
+      // Refresh data after status update
+      await fetchSellerData();
+    } catch (err) {
+      console.error("Error updating order status:", err);
+      setError(err instanceof Error ? err.message : "Failed to update order status");
+    }
   };
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Accepted': return 'bg-blue-100 text-blue-800';
-      case 'Shipped': return 'bg-purple-100 text-purple-800';
-      case 'Delivered': return 'bg-green-100 text-green-800';
-      case 'Cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Pending': return 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30';
+      case 'Accepted': return 'bg-blue-900/30 text-blue-400 border border-blue-500/30';
+      case 'Shipped': return 'bg-purple-900/30 text-purple-400 border border-purple-500/30';
+      case 'Delivered': return 'bg-green-900/30 text-green-400 border border-green-500/30';
+      case 'Cancelled': return 'bg-red-900/30 text-red-400 border border-red-500/30';
+      default: return 'bg-gray-900/30 text-gray-400 border border-gray-500/30';
     }
   };
 
@@ -251,6 +375,181 @@ export const SellerDashboard = () => {
     </div>
   );
 
+  const handleAddProduct = async (product: Omit<Product, 'id' | 'isActive'>) => {
+    try {
+      setError(null);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function addProduct(string memory name, uint256 price, uint256 stock) external"
+        ],
+        signer
+      );
+
+      const priceInWei = ethers.parseEther(product.price);
+      const tx = await contract.addProduct(product.name, priceInWei, product.stock);
+      await tx.wait();
+
+      // Close the add product modal
+      setShowAddProduct(false);
+      
+      // Show loading state
+      setLoading(true);
+      
+      // Refresh data after adding product
+      await fetchSellerData();
+      
+      // Switch to products tab
+      setActiveTab('products');
+    } catch (err) {
+      console.error("Error adding product:", err);
+      setError(err instanceof Error ? err.message : "Failed to add product");
+    }
+  };
+
+  const handleUpdateProduct = async (updatedProduct: Product) => {
+    try {
+      setError(null);
+      setUpdatingProductId(updatedProduct.id);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function updateProduct(uint256 productId, string memory name, uint256 price, uint256 stock, bool available) external"
+        ],
+        signer
+      );
+
+      const priceInWei = ethers.parseEther(updatedProduct.price);
+      const tx = await contract.updateProduct(
+        updatedProduct.id,
+        updatedProduct.name,
+        priceInWei,
+        updatedProduct.stock,
+        updatedProduct.isActive
+      );
+      await tx.wait();
+
+      // Close the edit product modal
+      setEditingProduct(null);
+      
+      // Show loading state
+      setLoading(true);
+      
+      // Refresh data after updating product
+      await fetchSellerData();
+      
+      // Switch to products tab
+      setActiveTab('products');
+    } catch (err) {
+      console.error("Error updating product:", err);
+      setError(err instanceof Error ? err.message : "Failed to update product");
+    } finally {
+      setUpdatingProductId(null);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: number) => {
+    try {
+      setError(null);
+      setDeletingProductId(productId);
+
+      if (!window.ethereum) {
+        throw new Error("Please install MetaMask to use this feature");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        [
+          "function updateProduct(uint256 productId, string memory name, uint256 price, uint256 stock, bool available) external"
+        ],
+        signer
+      );
+
+      // Instead of deleting, we'll mark the product as unavailable
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      const priceInWei = ethers.parseEther(product.price);
+      const tx = await contract.updateProduct(
+        productId,
+        product.name,
+        priceInWei,
+        product.stock,
+        false // Set available to false
+      );
+      await tx.wait();
+
+      // Show loading state
+      setLoading(true);
+      
+      // Refresh data after "deleting" product
+      await fetchSellerData();
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete product");
+    } finally {
+      setDeletingProductId(null);
+    }
+  };
+
+  if (!isRegisteredSeller) {
+    return (
+      <div className="w-full space-y-6">
+        <div className="bg-[#222] rounded-lg p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Become a Seller</h2>
+          <p className="text-gray-400 mb-6">
+            Register as a seller to start listing your products and managing orders.
+          </p>
+          <button
+            onClick={handleRegisterAsSeller}
+            disabled={registering}
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {registering ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                Registering...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Register as Seller
+              </>
+            )}
+          </button>
+          {error && (
+            <div className="mt-4 bg-red-900/30 text-red-400 border border-red-500/30 rounded-lg p-4">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6">
       {/* Tabs */}
@@ -329,19 +628,29 @@ export const SellerDashboard = () => {
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => setEditingProduct(product)}
-                      className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                      disabled={updatingProductId === product.id || deletingProductId === product.id}
+                      className="p-1.5 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
+                      {updatingProductId === product.id ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      )}
                     </button>
                     <button 
                       onClick={() => handleDeleteProduct(product.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                      disabled={updatingProductId === product.id || deletingProductId === product.id}
+                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      {deletingProductId === product.id ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-red-500"></div>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -412,7 +721,10 @@ export const SellerDashboard = () => {
       {/* Add Product Modal */}
       {showAddProduct && (
         <AddProduct
-          onClose={() => setShowAddProduct(false)}
+          onClose={() => {
+            setShowAddProduct(false);
+            fetchSellerData(); // Fetch products when modal is closed
+          }}
           onProductAdded={() => {
             if (newProduct) {
               handleAddProduct({
@@ -431,6 +743,7 @@ export const SellerDashboard = () => {
           product={editingProduct}
           onClose={() => setEditingProduct(null)}
           onUpdate={handleUpdateProduct}
+          isUpdating={updatingProductId === editingProduct.id}
         />
       )}
     </div>
