@@ -9,9 +9,9 @@ const Demo = dynamic(() => import("@/components/Home"), {
 });
 
 export default function Home() {
-  const { context } = useMiniAppContext();
+  const { isWalletAvailable, isFrameAvailable, error } = useMiniAppContext();
   return (
-    <SafeAreaContainer insets={context?.client.safeAreaInsets}>
+    <SafeAreaContainer>
       <CartProvider>
         <Demo />
       </CartProvider>
