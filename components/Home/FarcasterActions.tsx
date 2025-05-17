@@ -5,7 +5,7 @@ export function FarcasterActions() {
   const { actions } = useMiniAppContext();
 
   const handleClose = () => {
-    if (actions?.close) {
+    if (actions && typeof actions.close === 'function') {
       actions.close();
     }
   };
