@@ -4,6 +4,12 @@ import { APP_URL } from "@/lib/constants";
 export function FarcasterActions() {
   const { actions } = useMiniAppContext();
 
+  const handleClose = () => {
+    if (actions?.close) {
+      actions.close();
+    }
+  };
+
   return (
     <div className="space-y-4 border border-[#333] rounded-md p-4 bg-[#111]">
       <h2 className="text-xl font-bold text-left text-white">sdk.actions</h2>
@@ -18,7 +24,7 @@ export function FarcasterActions() {
             </button> */}
             <button
               className="bg-white text-black rounded-md p-2 text-sm hover:bg-gray-200 transition-colors"
-              onClick={() => actions?.close()}
+              onClick={handleClose}
             >
               close
             </button>
