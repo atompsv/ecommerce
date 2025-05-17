@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { motion } from 'framer-motion';
+import { useCart } from '../../context/CartContext';
 import SimpleEcommerce from '../../artifacts/contracts/SimpleEcommerce.sol/SimpleEcommerce.json';
+import { FaHeart, FaRegHeart, FaPlus, FaStar, FaSearch, FaSlidersH, FaMinus } from 'react-icons/fa';
 
 // Add window.ethereum type declaration
 declare global {
@@ -10,6 +13,20 @@ declare global {
 }
 
 const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
+
+// Add price formatting function
+const formatPrice = (price: string): string => {
+  const num = parseFloat(price);
+  if (isNaN(num)) return price;
+  
+  // If the number is very small (less than 0.0001), show more decimal places
+  if (num < 0.0001) {
+    return num.toFixed(6);
+  }
+  
+  // Remove trailing zeros after decimal point
+  return num.toString().replace(/\.?0+$/, '');
+};
 
 // Monad chain configuration
 const MONAD_CHAIN = {
@@ -49,17 +66,99 @@ interface OrderConfirmation {
   isOpen: boolean;
 }
 
+// Add Toast interface
+interface Toast {
+  id: number;
+  type: 'success' | 'error';
+  message: string;
+}
+
 export interface ProductListProps {
   onPurchaseSuccess?: () => void;
 }
 
+// Add animation variants
+const cardVariants = {
+  hidden: { 
+    opacity: 0,
+    y: 10,
+    scale: 0.98
+  },
+  visible: { 
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 15,
+      mass: 0.8
+    }
+  },
+  hover: {
+    scale: 1.01,
+    transition: {
+      type: "spring",
+      stiffness: 200,
+      damping: 15,
+      mass: 0.8
+    }
+  }
+};
+
 export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) => {
+  const { addToCart, items, seller, updateQuantity } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState<number | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmation | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [search, setSearch] = useState('');
+  const [showFilter, setShowFilter] = useState(false);
+  const [favorites, setFavorites] = useState<number[]>([]);
+  const [quantitySelectors, setQuantitySelectors] = useState<Record<number, number>>({});
+
+  // Filtered products
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) &&
+    p.available && // Only show available products
+    p.stock > 0    // Only show products with stock
+  );
+
+  // Add toast functions
+  const addToast = (type: 'success' | 'error', message: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 5000);
+  };
+
+  // Add dismiss toast function
+  const dismissToast = (id: number) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  const handleError = (error: any) => {
+    console.error("Error:", error);
+    let message = "An unexpected error occurred";
+
+    if (error.message) {
+      if (error.message.includes("user rejected")) {
+        message = "Transaction was cancelled";
+      } else if (error.message.includes("insufficient funds")) {
+        message = "Insufficient funds for this transaction";
+      } else if (error.message.includes("gas required exceeds allowance")) {
+        message = "Transaction would fail due to gas limit";
+      } else if (error.message.includes("execution reverted")) {
+        message = "Transaction failed: " + error.message.split("execution reverted:")[1]?.trim() || "Unknown reason";
+      }
+    }
+
+    addToast('error', message);
+  };
 
   const checkChain = async () => {
     if (!window.ethereum) {
@@ -185,64 +284,94 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
         signer
       );
 
-      // Convert productId to BigInt since the contract expects uint256
       const productIdBigInt = BigInt(orderConfirmation.product.id);
-      
-      // Create arrays for productIds and quantities
       const productIds = [productIdBigInt];
       const quantities = [BigInt(orderConfirmation.quantity)];
-
-      // Convert price to wei
       const priceInWei = ethers.parseEther(orderConfirmation.totalPrice);
 
-      console.log("Transaction parameters:", {
-        productIds,
-        quantities,
-        value: priceInWei.toString()
-      });
-
-      // Estimate gas first
       const gasEstimate = await contract.placeOrder.estimateGas(
         productIds,
         quantities,
         { value: priceInWei }
       );
 
-      // Add 20% to gas estimate for safety
       const gasLimit = gasEstimate * BigInt(12) / BigInt(10);
 
-      // Call the placeOrder function with arrays
       const tx = await contract.placeOrder(productIds, quantities, {
         value: priceInWei,
         gasLimit
       });
 
-      console.log("Transaction sent:", tx.hash);
+      addToast('success', 'Transaction submitted! Waiting for confirmation...');
 
-      // Wait for transaction to be mined
       const receipt = await tx.wait();
       
       if (receipt.status === 1) {
-        setPurchaseSuccess(true);
+        addToast('success', 'Purchase completed successfully!');
         if (onPurchaseSuccess) {
           onPurchaseSuccess();
         }
-        await loadProducts(); // Refresh the product list
-        setOrderConfirmation(null); // Close the confirmation modal
-        
-        // Show success message for 3 seconds
-        setTimeout(() => {
-          setPurchaseSuccess(false);
-        }, 3000);
+        await loadProducts();
+        setOrderConfirmation(null);
       } else {
         throw new Error("Transaction failed");
       }
     } catch (err) {
-      console.error("Error purchasing product:", err);
-      setError(err instanceof Error ? err.message : "Failed to purchase product");
+      handleError(err);
     } finally {
       setPurchasing(null);
     }
+  };
+
+  const handleAddToCart = (product: Product) => {
+    try {
+      console.log('Adding product to cart:', product);
+      
+      // Check if product is available
+      if (!product.available || product.stock <= 0) {
+        addToast('error', 'Product is not available');
+        return;
+      }
+
+      // Add to cart
+      addToCart({
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        seller: product.seller
+      });
+      
+      // Show success message
+      addToast('success', `${product.name} added to cart`);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      addToast('error', 'Failed to add to cart');
+    }
+  };
+
+  const toggleQuantitySelector = (productId: number) => {
+    setQuantitySelectors(prev => {
+      const newState = { ...prev };
+      if (newState[productId]) {
+        delete newState[productId];
+      } else {
+        newState[productId] = 1;
+      }
+      return newState;
+    });
+  };
+
+  const updateQuantitySelector = (productId: number, newQuantity: number) => {
+    if (newQuantity < 1) return;
+    setQuantitySelectors(prev => ({
+      ...prev,
+      [productId]: newQuantity
+    }));
+  };
+
+  // Toggle favorite (UI only)
+  const toggleFavorite = (id: number) => {
+    setFavorites(favs => favs.includes(id) ? favs.filter(f => f !== id) : [...favs, id]);
   };
 
   if (loading) {
@@ -263,144 +392,96 @@ export const ProductList: React.FC<ProductListProps> = ({ onPurchaseSuccess }) =
   }
 
   return (
-    <div className="w-full">
-      {/* Success Message */}
-      {purchaseSuccess && (
-        <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative animate-fade-in-out" role="alert">
-          <strong className="font-bold">Success! </strong>
-          <span className="block sm:inline">Your purchase was completed successfully.</span>
+    <div className="w-full max-w-2xl mx-auto">
+      {/* Search Bar & Filter */}
+      <div className="flex items-center gap-3 mt-4 mb-6">
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search products..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-white text-gray-900 placeholder-gray-400 shadow focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
-      )}
-
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Available Products</h2>
+        {/* <button
+          className="p-3 rounded-xl bg-gradient-to-tr from-blue-500 to-purple-500 text-white shadow hover:scale-105 transition-transform"
+          onClick={() => setShowFilter(f => !f)}
+        >
+          <FaSlidersH />
+        </button> */}
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
-        {products.map((product) => (
-          <div 
-            key={product.id} 
-            className="bg-[#222] rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
+      {/* Results Count */}
+      {/* <div className="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">
+        Found {filteredProducts.length} results
+      </div> */}
+
+      {/* Product Grid */}
+      <div className="grid grid-cols-2 gap-6">
+        {filteredProducts.map((product, index) => (
+          <motion.div
+            key={product.id}
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            whileHover="hover"
+            custom={index}
+            className="relative bg-white rounded-2xl shadow-lg p-3 flex flex-col min-h-[260px]"
           >
-            {/* Product Image */}
-            <div className="relative h-24 bg-gray-100">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div className="absolute top-1.5 left-1.5">
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                  product.available 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {product.available ? 'In Stock' : 'Out of Stock'}
-                </span>
-              </div>
+            {/* Heart Icon */}
+            <button
+              className="absolute top-3 right-3 z-10"
+              onClick={() => toggleFavorite(product.id)}
+            >
+              {favorites.includes(product.id) ? (
+                <FaHeart className="text-red-500 text-xl" />
+              ) : (
+                <FaRegHeart className="text-gray-300 text-xl" />
+              )}
+            </button>
+
+            {/* Product Image Placeholder */}
+            <div className="flex items-center justify-center h-24 mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
             </div>
 
             {/* Product Info */}
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">#{product.id}</span>
-                <span className="text-xs text-gray-400">Stock: {product.stock}</span>
-              </div>
-              
-              <h3 className="text-sm font-semibold text-white mb-1 line-clamp-2">{product.name}</h3>
-              
-              <div className="flex items-baseline justify-between mb-2">
-                <div className="text-base font-bold text-blue-400">
-                  {product.price} ETH
+            <div className="flex-1 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-gray-900 text-base line-clamp-1">{product.name}</span>
+                  <span className="flex items-center gap-1 text-yellow-500 text-xs font-bold">
+                    <FaStar className="inline" />
+                    {(4 + (product.id % 2) * 0.7).toFixed(1)}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400 mb-2">{product.seller.slice(0, 8)}...{product.seller.slice(-4)}</div>
+                <div className="text-xs text-gray-500 mb-2">
+                  Stock: <span className={product.stock > 0 ? "text-green-500" : "text-red-500"}>{product.stock}</span>
                 </div>
               </div>
-
-              {product.available && (
-                <button 
-                  className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold flex items-center justify-center gap-1.5"
-                  onClick={() => handleBuyClick(product)}
-                  disabled={purchasing === product.id}
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-lg font-bold text-blue-500">${formatPrice(product.price)}</span>
+                <button
+                  className={`rounded-full p-2 shadow-lg transition-transform ${
+                    product.stock > 0 
+                      ? "bg-gradient-to-tr from-blue-500 to-purple-500 hover:scale-110" 
+                      : "bg-gray-300 cursor-not-allowed"
+                  }`}
+                  onClick={() => handleAddToCart(product)}
+                  disabled={seller !== null && seller !== product.seller || product.stock === 0}
                 >
-                  {purchasing === product.id ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      Buy Now
-                    </>
-                  )}
+                  <FaPlus className={`text-lg ${product.stock > 0 ? "text-white" : "text-gray-400"}`} />
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
-
-      {/* Order Confirmation Modal */}
-      {orderConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-[#222] rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-white mb-4">Confirm Your Order</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <p className="text-gray-400">Product</p>
-                <p className="text-white font-semibold">{orderConfirmation.product.name}</p>
-              </div>
-
-              <div>
-                <p className="text-gray-400">Price per item</p>
-                <p className="text-white font-semibold">{orderConfirmation.product.price} ETH</p>
-              </div>
-
-              <div>
-                <p className="text-gray-400">Quantity</p>
-                <div className="flex items-center gap-2">
-                  <button 
-                    className="px-2 py-1 bg-blue-600 text-white rounded"
-                    onClick={() => handleQuantityChange(Math.max(1, orderConfirmation.quantity - 1))}
-                  >
-                    -
-                  </button>
-                  <span className="text-white">{orderConfirmation.quantity}</span>
-                  <button 
-                    className="px-2 py-1 bg-blue-600 text-white rounded"
-                    onClick={() => handleQuantityChange(orderConfirmation.quantity + 1)}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-gray-400">Total Price</p>
-                <p className="text-white font-semibold">{orderConfirmation.totalPrice} ETH</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 mt-6">
-              <button
-                className="flex-1 py-2 px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                onClick={() => setOrderConfirmation(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                onClick={handlePurchase}
-                disabled={purchasing !== null}
-              >
-                {purchasing !== null ? 'Processing...' : 'Confirm Purchase'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }; 

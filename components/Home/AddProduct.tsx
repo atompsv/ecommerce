@@ -87,13 +87,13 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-[#222] rounded-lg w-full max-w-md mx-4">
+      <div className="bg-white rounded-lg w-full max-w-md mx-4 shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#333]">
-          <h2 className="text-xl font-bold text-white">Add New Product</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Add New Product</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-500 hover:text-gray-700 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -112,7 +112,7 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
 
           {/* Product Name */}
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Product Name
             </label>
             <input
@@ -122,15 +122,15 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter product name"
             />
           </div>
 
           {/* Price */}
           <div>
-            <label htmlFor="price" className="block text-sm font-medium text-gray-300 mb-1">
-              Price (ETH)
+            <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+              Price (MON)
             </label>
             <input
               type="number"
@@ -141,14 +141,14 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
               required
               step="0.000000000000000001"
               min="0"
-              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="0.00"
             />
           </div>
 
           {/* Stock */}
           <div>
-            <label htmlFor="stock" className="block text-sm font-medium text-gray-300 mb-1">
+            <label htmlFor="stock" className="block text-sm font-medium text-gray-700 mb-1">
               Stock Quantity
             </label>
             <input
@@ -159,14 +159,14 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
               onChange={handleChange}
               required
               min="1"
-              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter stock quantity"
             />
           </div>
 
           {/* Image URL */}
           <div>
-            <label htmlFor="image" className="block text-sm font-medium text-gray-300 mb-1">
+            <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-1">
               Image URL (Optional)
             </label>
             <input
@@ -175,7 +175,7 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
               name="image"
               value={formData.image}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-[#333] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="https://example.com/image.jpg"
             />
           </div>
@@ -185,14 +185,14 @@ export const AddProduct: React.FC<AddProductProps> = ({ onClose, onProductAdded 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
               disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-gradient-to-tr from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-lg transition-all transform hover:scale-[1.02] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               {loading ? (

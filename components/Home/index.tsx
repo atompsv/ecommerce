@@ -9,12 +9,16 @@ import { ProductList } from "./ProductList";
 import { SellerDashboard } from "./SellerDashboard";
 import { OrderHistory } from "./OrderHistory";
 import { Delivery } from "./Delivery";
+import { useCart } from '../../context/CartContext';
+import { FaShoppingCart } from 'react-icons/fa';
+import { Cart } from './Cart';
 
 const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
 
 export default function Home() {
   const { actions } = useMiniAppContext();
   const { isConnected, address } = useAccount();
+  const { items } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSeller, setIsSeller] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
@@ -22,6 +26,7 @@ export default function Home() {
   const [showDelivery, setShowDelivery] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCart, setShowCart] = useState(false);
 
   // Check if user is a seller
   const checkSellerStatus = async () => {
@@ -116,13 +121,23 @@ export default function Home() {
     }
   }, [isConnected, address]);
 
+  const handleCartClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowCart(!showCart);
+  };
+
+  // Add this function to handle cart closing
+  const handleCartClose = () => {
+    setShowCart(false);
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#111] relative">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-[#f6f7fb] to-[#e9eaf3] relative">
       {/* Top Bar - Always Fixed */}
-      <div className="fixed top-0 left-0 right-0 h-14 bg-[#111] border-b border-[#333] flex items-center justify-between px-4 z-30">
+      <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-30">
         {/* Hamburger Menu Button */}
         <button 
-          className="text-gray-400 hover:text-white transition-colors"
+          className="text-gray-600 hover:text-gray-900 transition-colors"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -130,17 +145,32 @@ export default function Home() {
           </svg>
         </button>
 
-        {/* Title */}
-        <h1 className="text-lg font-bold text-white">
-          {showDashboard ? 'Seller Dashboard' : 
-           showOrderHistory ? 'Order History' : 
-           showDelivery ? 'Delivery Information' : 
-           'Marketplace'}
-      </h1>
+        {/* Title and Cart */}
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-bold text-gray-900">
+            {showDashboard ? 'Seller Dashboard' : 
+             showOrderHistory ? 'Order History' : 
+             showDelivery ? 'Delivery Information' : 
+             'Web3 Marketplace'}
+          </h1>
+          
+          {/* Cart Button */}
+          <button
+            onClick={handleCartClick}
+            className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <FaShoppingCart className="h-6 w-6" />
+            {items.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-[#232233] text-[#FFD700] text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 leading-none">
+                {items.reduce((total, item) => total + item.quantity, 0)}
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* Close Button */}
         <button
-          className="text-gray-400 hover:text-white transition-colors"
+          className="text-gray-600 hover:text-gray-900 transition-colors"
           onClick={() => actions?.close()}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -148,6 +178,23 @@ export default function Home() {
           </svg>
         </button>
       </div>
+
+      {/* Cart Modal */}
+      {showCart && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 pt-14"
+          onClick={handleCartClose}
+        >
+          <div 
+            className="bg-white overflow-y-auto mx-5 rounded-2xl max-h-[100vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-6">
+              <Cart onClose={handleCartClose} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Backdrop Overlay */}
       {isMenuOpen && (
@@ -159,7 +206,7 @@ export default function Home() {
 
       {/* Sidebar Menu */}
       <div 
-        className={`fixed top-14 left-0 h-[calc(100%-3.5rem)] w-64 bg-[#222] border-r border-[#333] shadow-lg z-20 transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-14 left-0 h-[calc(100%-3.5rem)] w-64 bg-white border-r border-gray-200 shadow-lg z-20 transform transition-transform duration-300 ease-in-out ${
           isMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -168,7 +215,7 @@ export default function Home() {
           <div className="p-4 space-y-4">
             {/* Home Button */}
             <button
-              className="w-full flex items-center gap-3 px-4 py-3 bg-[#333] hover:bg-[#444] rounded-lg transition-colors group"
+              className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
               onClick={() => {
                 setShowDashboard(false);
                 setShowOrderHistory(false);
@@ -176,17 +223,17 @@ export default function Home() {
                 setIsMenuOpen(false);
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
-              <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+              <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">
                 Home
               </span>
             </button>
 
             {/* Order History Button */}
             <button
-              className="w-full flex items-center gap-3 px-4 py-3 bg-[#333] hover:bg-[#444] rounded-lg transition-colors group"
+              className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
               onClick={() => {
                 setShowOrderHistory(true);
                 setShowDashboard(false);
@@ -194,10 +241,10 @@ export default function Home() {
                 setIsMenuOpen(false);
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+              <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">
                 Order History
               </span>
             </button>
@@ -205,7 +252,7 @@ export default function Home() {
             {/* Seller Dashboard Button */}
             {isConnected && isSeller && (
               <button
-                className="w-full flex items-center gap-3 px-4 py-3 bg-[#333] hover:bg-[#444] rounded-lg transition-colors group"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
                 onClick={() => {
                   setShowDashboard(true);
                   setShowOrderHistory(false);
@@ -213,10 +260,10 @@ export default function Home() {
                   setIsMenuOpen(false);
                 }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+                <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">
                   Seller Dashboard
                 </span>
               </button>
@@ -249,9 +296,9 @@ export default function Home() {
           </div>
 
           {/* Developer Tag */}
-          <div className="mt-auto p-4 border-t border-[#333]">
+          <div className="mt-auto p-4 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
-              Developed by <span className="text-blue-400">atompsv</span>
+              Developed by <span className="text-blue-500">atompsv</span>
             </p>
           </div>
         </div>
