@@ -1,93 +1,87 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { FrameWalletProvider } from './frame-wallet-provider';
+import { FrameContext } from "@farcaster/frame-core/dist/context";
+import sdk from "@farcaster/frame-sdk";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import FrameWalletProvider from "./frame-wallet-provider";
 
-type EthereumProvider = {
-  isMetaMask: boolean;
-  request: (args: { method: string; params?: any[] }) => Promise<any>;
-  on: (event: string, callback: (...args: any[]) => void) => void;
-  removeListener: (event: string, callback: (...args: any[]) => void) => void;
-};
-
-type FarcasterProvider = {
-  close: () => void;
-};
-
-// Use type augmentation instead of interface extension
-type WindowWithProviders = Window & {
-  ethereum?: EthereumProvider;
-  farcaster?: FarcasterProvider;
-};
-
-interface WalletContextValue {
-  isWalletAvailable: boolean;
-  isFrameAvailable: boolean;
+interface FrameContextValue {
+  context: FrameContext | null;
+  isSDKLoaded: boolean;
+  isEthProviderAvailable: boolean;
   error: string | null;
-  actions: {
-    close?: () => void;
-  };
+  actions: typeof sdk.actions | null;
 }
 
-const WalletContext = createContext<WalletContextValue | undefined>(undefined);
+const FrameProviderContext = createContext<FrameContextValue | undefined>(
+  undefined
+);
 
-// Export the hook as a named export
-export const useWallet = () => {
-  const context = useContext(WalletContext);
-  if (!context) {
-    throw new Error('useWallet must be used within a WalletProvider');
+export function useFrame() {
+  const context = useContext(FrameProviderContext);
+  if (context === undefined) {
+    throw new Error("useFrame must be used within a FrameProvider");
   }
   return context;
-};
+}
 
-export function WalletProviderWrapper({ children }: { children: ReactNode }) {
-  const [isWalletAvailable, setIsWalletAvailable] = useState(false);
-  const [isFrameAvailable, setIsFrameAvailable] = useState(false);
+interface FrameProviderProps {
+  children: ReactNode;
+}
+
+export function FrameProvider({ children }: FrameProviderProps) {
+  const [context, setContext] = useState<FrameContext | null>(null);
+  const [actions, setActions] = useState<typeof sdk.actions | null>(null);
+  const [isEthProviderAvailable, setIsEthProviderAvailable] =
+    useState<boolean>(false);
+  const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actions, setActions] = useState<{ close?: () => void }>({});
 
   useEffect(() => {
-    const checkWallets = async () => {
+    const load = async () => {
       try {
-        // Check for MetaMask
-        const hasMetaMask = typeof window !== 'undefined' && (window as WindowWithProviders).ethereum?.isMetaMask;
-        setIsWalletAvailable(!!hasMetaMask);
-
-        // Check for Farcaster Frame
-        const hasFrame = typeof window !== 'undefined' && (window as WindowWithProviders).farcaster;
-        setIsFrameAvailable(!!hasFrame);
-
-        if (!hasMetaMask && !hasFrame) {
-          setError('No wallet detected. Please install MetaMask or use Farcaster Frame.');
+        const context = await sdk.context;
+        if (context) {
+          setContext(context as FrameContext);
+          setActions(sdk.actions);
+          setIsEthProviderAvailable(sdk.wallet.ethProvider ? true : false);
+        } else {
+          setError("Failed to load Farcaster context");
         }
-
-        // Set up Farcaster Frame actions if available
-        if (hasFrame) {
-          setActions({
-            close: () => (window as WindowWithProviders).farcaster?.close(),
-          });
-        }
+        await sdk.actions.ready();
       } catch (err) {
-        setError('Error checking wallet availability');
-        console.error('Wallet check error:', err);
+        setError(
+          err instanceof Error ? err.message : "Failed to initialize SDK"
+        );
+        console.error("SDK initialization error:", err);
       }
     };
 
-    checkWallets();
-  }, []);
+    if (sdk && !isSDKLoaded) {
+      load().then(() => {
+        setIsSDKLoaded(true);
+        console.log("SDK loaded");
+      });
+    }
+  }, [isSDKLoaded]);
 
   return (
-    <FrameWalletProvider>
-      <WalletContext.Provider
-        value={{
-          isWalletAvailable,
-          isFrameAvailable,
-          error,
-          actions,
-        }}
-      >
-        {children}
-      </WalletContext.Provider>
-    </FrameWalletProvider>
+    <FrameProviderContext.Provider
+      value={{
+        context,
+        actions,
+        isSDKLoaded,
+        isEthProviderAvailable,
+        error,
+      }}
+    >
+      <FrameWalletProvider>{children}</FrameWalletProvider>
+    </FrameProviderContext.Provider>
   );
 }

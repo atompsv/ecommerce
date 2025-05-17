@@ -9,7 +9,7 @@ import {
 } from "wagmi";
 
 export function WalletActions() {
-  const { isWalletAvailable, isFrameAvailable } = useMiniAppContext();
+  const { isEthProviderAvailable } = useMiniAppContext();
   const { isConnected, address, chainId } = useAccount();
   const { disconnect } = useDisconnect();
   const { data: hash, sendTransaction } = useSendTransaction();
@@ -24,7 +24,7 @@ export function WalletActions() {
 
   return (
     <div className="space-y-4 border border-[#333] rounded-md p-4">
-      <h2 className="text-xl font-bold text-left">Wallet Connection</h2>
+      <h2 className="text-xl font-bold text-left">sdk.wallet.ethProvider</h2>
       <div className="flex flex-row space-x-4 justify-start items-start">
         {isConnected ? (
           <div className="flex flex-col space-y-4 justify-start">
@@ -82,9 +82,9 @@ export function WalletActions() {
             </button>
           </div>
         ) : (
-          !isWalletAvailable && !isFrameAvailable && (
+          !isEthProviderAvailable && (
             <p className="text-sm text-left">
-              Please install MetaMask or use Farcaster Frame to use this application
+              Wallet connection only via Warpcast
             </p>
           )
         )}

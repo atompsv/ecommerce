@@ -16,7 +16,7 @@ import { Cart } from './Cart';
 const CONTRACT_ADDRESS = "0xefbE9638c138417F1c1406DcF87913a060e3eB8a";
 
 export default function Home() {
-  const { isWalletAvailable, isFrameAvailable, actions } = useMiniAppContext();
+  const { actions } = useMiniAppContext();
   const { isConnected, address } = useAccount();
   const { items } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -27,7 +27,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCart, setShowCart] = useState(false);
-  const [showAddProduct, setShowAddProduct] = useState(false);
 
   // Check if user is a seller
   const checkSellerStatus = async () => {
@@ -141,7 +140,7 @@ export default function Home() {
           className="text-gray-600 hover:text-gray-900 transition-colors"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" className="text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
@@ -172,13 +171,9 @@ export default function Home() {
         {/* Close Button */}
         <button
           className="text-gray-600 hover:text-gray-900 transition-colors"
-          onClick={() => {
-            if (actions?.close) {
-              actions.close();
-            }
-          }}
+          onClick={() => actions?.close()}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" className="text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -228,7 +223,7 @@ export default function Home() {
                 setIsMenuOpen(false);
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
               <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">
@@ -246,7 +241,7 @@ export default function Home() {
                 setIsMenuOpen(false);
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">

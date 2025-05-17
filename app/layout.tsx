@@ -1,27 +1,25 @@
 import type { Metadata } from "next";
-import { WalletProviderWrapper } from "@/components/farcaster-provider";
-import { FrameWalletProvider } from "@/components/frame-wallet-provider";
 import { Inter } from "next/font/google";
+import { FrameProvider } from "@/components/farcaster-provider";
+
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "E-commerce DApp",
-  description: "A decentralized e-commerce application",
+  title: "My mini app",
+  description: "A template for building mini-apps on Farcaster and Monad",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <WalletProviderWrapper>
-          {children}
-        </WalletProviderWrapper>
+        <FrameProvider>{children}</FrameProvider>
       </body>
     </html>
   );
